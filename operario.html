@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>GeoMedidor · Operario</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0c1117;
+    --surface:  #161d27;
+    --card:     #1c2533;
+    --border:   #263347;
+    --accent:   #3b82f6;
+    --green:    #22c55e;
+    --yellow:   #f59e0b;
+    --red:      #ef4444;
+    --text:     #f0f4f8;
+    --muted:    #64748b;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Noise texture overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 999;
+  }
+
+  .app { max-width: 430px; margin: 0 auto; padding-bottom: 32px; }
+
+  /* ── HEADER ── */
+  header {
+    padding: 16px 20px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .hrow { display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+  }
+  .brand-name {
+    font-family: var(--mono); font-size: 15px; font-weight: 600;
+    letter-spacing: -0.3px; color: var(--text);
+  }
+  .brand-name span { color: var(--accent); }
+  .sync-badge {
+    font-family: var(--mono); font-size: 11px;
+    padding: 3px 10px; border-radius: 20px;
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--muted);
+    transition: all .3s;
+  }
+  .sync-badge.syncing { color: var(--yellow); border-color: var(--yellow); }
+  .sync-badge.synced  { color: var(--green);  border-color: var(--green); }
+  .sync-badge.error   { color: var(--red);    border-color: var(--red); }
+
+  /* Operator selector */
+  .op-row {
+    margin-top: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .op-row label { font-size: 11px; color: var(--muted); font-family: var(--mono); white-space: nowrap; }
+  .op-row input {
+    flex: 1; background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 11px;
+    font-family: var(--mono); font-size: 13px; color: var(--text);
+    outline: none;
+  }
+  .op-row input:focus { border-color: var(--accent); }
+
+  /* ── GPS PILL ── */
+  .gps-pill {
+    margin: 16px 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .gps-icon { font-size: 18px; flex-shrink: 0; }
+  .gps-info { flex: 1; min-width: 0; }
+  .gps-status { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .gps-status.ready { color: var(--green); }
+  .gps-status.loading { color: var(--yellow); }
+  .gps-status.error { color: var(--red); }
+  .gps-coords {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+  .gps-acc-chip {
+    font-family: var(--mono); font-size: 11px;
+    padding: 3px 8px; border-radius: 6px;
+    background: var(--card); flex-shrink: 0;
+  }
+  .acc-good  { color: var(--green);  }
+  .acc-mid   { color: var(--yellow); }
+  .acc-bad   { color: var(--red);    }
+
+  /* ── SEARCH / LISTADO ── */
+  .section { padding: 20px 20px 0; }
+  .sec-label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+  }
+  .search-box {
+    display: flex; gap: 8px; margin-bottom: 14px;
+  }
+  .search-box input {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 14px;
+    font-family: var(--mono); font-size: 14px; color: var(--text);
+    outline: none; transition: border-color .2s;
+  }
+  .search-box input:focus { border-color: var(--accent); }
+  .btn-gps {
+    padding: 11px 14px; background: var(--accent); border: none;
+    border-radius: 10px; font-size: 16px; cursor: pointer;
+    transition: opacity .2s; flex-shrink: 0;
+  }
+  .btn-gps:active { opacity: .7; }
+  .btn-gps:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* Medidor list item */
+  .med-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer; transition: border-color .2s, background .2s;
+    position: relative;
+  }
+  .med-item:active { background: var(--card); }
+  .med-item.selected { border-color: var(--accent); background: rgba(59,130,246,.07); }
+  .med-item.done { border-color: var(--green); }
+  .med-item.done::after {
+    content: '✓';
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--green); font-size: 16px; font-weight: 700;
+  }
+
+  .med-num {
+    font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text);
+  }
+  .med-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .med-status {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: var(--muted);
+  }
+  .med-status.done { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .med-status.pending { background: var(--yellow); }
+
+  /* ── CAPTURE PANEL ── */
+  .capture-panel {
+    margin: 16px 20px 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+    display: none;
+  }
+  .capture-panel.open { display: block; }
+  .capture-header {
+    padding: 14px 16px; background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .capture-title { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .capture-title span { color: var(--accent); }
+  .btn-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 20px; cursor: pointer; line-height: 1;
+  }
+  .capture-body { padding: 16px; }
+
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block; font-family: var(--mono); font-size: 10px;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .field select, .field textarea {
+    width: 100%; background: var(--card); border: 1px solid var(--border);
+    border-radius: 9px; padding: 10px 12px;
+    font-family: var(--sans); font-size: 14px; color: var(--text);
+    outline: none; transition: border-color .2s;
+    -webkit-appearance: none; resize: none;
+  }
+  .field select:focus, .field textarea:focus { border-color: var(--accent); }
+  .field select option { background: var(--card); }
+
+  .btn-registrar {
+    width: 100%; padding: 15px; background: var(--green); border: none;
+    border-radius: 11px; color: #000; font-family: var(--mono);
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: opacity .2s; letter-spacing: .5px;
+  }
+  .btn-registrar:active { opacity: .8; }
+  .btn-registrar:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  /* ── EMPTY / LOADING ── */
+  .empty {
+    text-align: center; padding: 36px 20px;
+    color: var(--muted); font-size: 13px; font-family: var(--mono);
+    border: 1px dashed var(--border); border-radius: 12px;
+    line-height: 1.7;
+  }
+  .empty .big { font-size: 28px; margin-bottom: 10px; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--text); color: #000; padding: 10px 22px;
+    border-radius: 30px; font-family: var(--mono); font-size: 12px;
+    font-weight: 600; z-index: 200; transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.ok    { background: var(--green); }
+  .toast.warn  { background: var(--yellow); }
+  .toast.err   { background: var(--red); color: #fff; }
+
+  /* spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { display: inline-block; animation: spin .7s linear infinite; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="hrow">
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <div class="brand-name">Geo<span>Medidor</span></div>
+      </div>
+      <div class="sync-badge" id="syncBadge">● sin conexión</div>
+    </div>
+    <div class="op-row">
+      <label>OPERARIO:</label>
+      <input type="text" id="operario" placeholder="Tu nombre..." autocomplete="off">
+    </div>
+  </header>
+
+  <!-- GPS -->
+  <div class="gps-pill">
+    <div class="gps-icon">📡</div>
+    <div class="gps-info">
+      <div class="gps-status" id="gpsStatus">Presioná 📍 para capturar ubicación</div>
+      <div class="gps-coords" id="gpsCoords"></div>
+    </div>
+    <div class="gps-acc-chip" id="gpsAcc"></div>
+  </div>
+
+  <!-- Listado de medidores -->
+  <div class="section">
+    <div class="sec-label">Medidores pendientes</div>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Buscar número de medidor..." oninput="filtrar()">
+      <button class="btn-gps" id="btnGps" onclick="capturarGPS()" title="Capturar GPS">📍</button>
+    </div>
+    <div id="listaMedidores">
+      <div class="empty"><div class="big">⚙️</div>Configurá Supabase<br>para cargar el listado</div>
+    </div>
+  </div>
+
+  <!-- Panel de captura -->
+  <div class="capture-panel" id="capturePanel">
+    <div class="capture-header">
+      <div class="capture-title">Registrar: <span id="panelMedNum">—</span></div>
+      <button class="btn-close" onclick="cerrarPanel()">×</button>
+    </div>
+    <div class="capture-body">
+      <div class="field">
+        <label>Estado del medidor</label>
+        <select id="estado">
+          <option value="ok">✅ Legible / OK</option>
+          <option value="dañado">⚠️ Dañado</option>
+          <option value="sin_acceso">🚫 Sin acceso</option>
+          <option value="no_encontrado">❓ No encontrado</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Observaciones</label>
+        <textarea id="obs" rows="2" placeholder="Notas opcionales..."></textarea>
+      </div>
+      <button class="btn-registrar" id="btnRegistrar" onclick="guardarRegistro()">
+        💾 Guardar con GPS
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIGURACIÓN — reemplazar con tus datos
+// ══════════════════════════════════════════════
+const SUPABASE_URL    = 'https://jhnpcrjpufawveejwrzf.supabase.co';
+const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpobnBjcmpwdWZhd3ZlZWp3cnpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNTg3MjAsImV4cCI6MjA5MzkzNDcyMH0.TPJnxt8WkdOwcoiaQbpQd4Fc5Qwo5ZsdRbpaM9FRwho';
+const TABLA_MEDIDORES = 'medidores';        // tabla con el listado previo
+const TABLA_REGISTROS = 'georegistros';     // tabla donde se guardan las capturas
+
+// ══════════════════════════════════════════════
+
+let gps = null;
+let medidorSeleccionado = null;
+let todosMedidores = [];
+
+// ── Utils ──
+const $ = id => document.getElementById(id);
+function toast(msg, tipo = 'ok') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = `toast ${tipo} show`;
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+async function supaFetch(tabla, options = {}) {
+  const { method = 'GET', body, params = '' } = options;
+  const url = `${SUPABASE_URL}/rest/v1/${tabla}${params}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'apikey': SUPABASE_ANON,
+      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'Content-Type': 'application/json',
+      'Prefer': method === 'POST' ? 'return=minimal' : '',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return method === 'GET' ? res.json() : true;
+}
+
+// ── GPS ──
+function capturarGPS() {
+  if (!navigator.geolocation) { toast('GPS no disponible', 'err'); return; }
+  const btn = $('btnGps');
+  btn.disabled = true; btn.textContent = '⏳';
+  $('gpsStatus').textContent = 'Obteniendo ubicación...';
+  $('gpsStatus').className = 'gps-status loading';
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      gps = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
+      $('gpsStatus').textContent = 'Ubicación lista';
+      $('gpsStatus').className = 'gps-status ready';
+      $('gpsCoords').textContent = `${gps.lat.toFixed(6)}, ${gps.lng.toFixed(6)}`;
+      const acc = Math.round(gps.acc);
+      $('gpsAcc').textContent = `±${acc}m`;
+      $('gpsAcc').className = `gps-acc-chip ${acc < 10 ? 'acc-good' : acc < 30 ? 'acc-mid' : 'acc-bad'}`;
+      btn.disabled = false; btn.textContent = '🔄';
+      actualizarBtnRegistrar();
+      toast('✓ GPS capturado', 'ok');
+    },
+    err => {
+      $('gpsStatus').textContent = err.code === 1 ? 'Permiso denegado' : 'Sin señal';
+      $('gpsStatus').className = 'gps-status error';
+      btn.disabled = false; btn.textContent = '📍';
+      toast('No se pudo obtener GPS', 'err');
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// ── Cargar listado desde Supabase ──
+async function cargarMedidores() {
+  $('syncBadge').textContent = '⟳ cargando';
+  $('syncBadge').className = 'sync-badge syncing';
+  try {
+    // Traer medidores y registros ya hechos
+    const [medidores, registros] = await Promise.all([
+      supaFetch(TABLA_MEDIDORES, { params: '?select=*&order=numero.asc' }),
+      supaFetch(TABLA_REGISTROS, { params: '?select=medidor_id' }),
+    ]);
+    const hechos = new Set(registros.map(r => r.medidor_id));
+    todosMedidores = medidores.map(m => ({ ...m, done: hechos.has(m.id) }));
+    renderMedidores(todosMedidores);
+    $('syncBadge').textContent = `✓ ${medidores.length} medidores`;
+    $('syncBadge').className = 'sync-badge synced';
+  } catch (e) {
+    $('syncBadge').textContent = '✕ sin conexión';
+    $('syncBadge').className = 'sync-badge error';
+    $('listaMedidores').innerHTML = `<div class="empty"><div class="big">🔌</div>No se pudo conectar<br>Verificá la configuración de Supabase</div>`;
+  }
+}
+
+function renderMedidores(lista) {
+  if (!lista.length) {
+    $('listaMedidores').innerHTML = `<div class="empty"><div class="big">🎉</div>Sin resultados</div>`;
+    return;
+  }
+  $('listaMedidores').innerHTML = lista.map(m => `
+    <div class="med-item ${m.done ? 'done' : ''}" onclick="seleccionarMedidor(${m.id}, '${m.numero}', ${m.done})">
+      <div class="med-status ${m.done ? 'done' : 'pending'}"></div>
+      <div>
+        <div class="med-num">${m.numero}</div>
+        <div class="med-meta">${m.direccion || ''} ${m.tipo ? '· ' + m.tipo : ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filtrar() {
+  const q = $('searchInput').value.toLowerCase();
+  renderMedidores(todosMedidores.filter(m =>
+    m.numero.toLowerCase().includes(q) || (m.direccion || '').toLowerCase().includes(q)
+  ));
+}
+
+function seleccionarMedidor(id, numero, done) {
+  if (done) { toast('Este medidor ya fue registrado', 'warn'); return; }
+  medidorSeleccionado = { id, numero };
+  $('panelMedNum').textContent = numero;
+  $('obs').value = '';
+  $('capturePanel').classList.add('open');
+  actualizarBtnRegistrar();
+  $('capturePanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function cerrarPanel() {
+  $('capturePanel').classList.remove('open');
+  medidorSeleccionado = null;
+}
+
+function actualizarBtnRegistrar() {
+  $('btnRegistrar').disabled = !(gps && medidorSeleccionado);
+}
+
+// ── Guardar registro ──
+async function guardarRegistro() {
+  if (!gps || !medidorSeleccionado) return;
+  const operario = $('operario').value.trim() || 'Anónimo';
+  const estado   = $('estado').value;
+  const obs      = $('obs').value.trim();
+
+  $('btnRegistrar').disabled = true;
+  $('btnRegistrar').textContent = '⏳ Guardando...';
+
+  try {
+    await supaFetch(TABLA_REGISTROS, {
+      method: 'POST',
+      body: {
+        medidor_id:  medidorSeleccionado.id,
+        numero:      medidorSeleccionado.numero,
+        latitud:     gps.lat,
+        longitud:    gps.lng,
+        precision_m: Math.round(gps.acc),
+        estado,
+        observaciones: obs,
+        operario,
+        fecha_registro: new Date().toISOString(),
+      }
+    });
+
+    // Marcar como hecho localmente
+    todosMedidores = todosMedidores.map(m =>
+      m.id === medidorSeleccionado.id ? { ...m, done: true } : m
+    );
+    filtrar();
+    cerrarPanel();
+    gps = null;
+    $('gpsStatus').textContent = 'Presioná 📍 para capturar ubicación';
+    $('gpsStatus').className = 'gps-status';
+    $('gpsCoords').textContent = '';
+    $('gpsAcc').textContent = '';
+    $('btnGps').textContent = '📍';
+    toast('✓ Registro guardado', 'ok');
+  } catch (e) {
+    toast('Error al guardar', 'err');
+    $('btnRegistrar').disabled = false;
+    $('btnRegistrar').textContent = '💾 Guardar con GPS';
+  }
+}
+
+// Init
+cargarMedidores();
+</script>
+</body>
+</html>
